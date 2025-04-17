@@ -1,7 +1,7 @@
 # https://taskfile.dev
 
 version: '3'
-interval: 200ms
+interval: 500ms
 
 tasks:
 

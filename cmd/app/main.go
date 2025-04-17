@@ -63,40 +63,83 @@ func main() {
 	// aggregate type + id
 	commandID := "agg-123"
 
+	_, _ = kv.Create(commandID, nil)
+
 	go func() {
 		for {
-			time.Sleep(1000 * time.Millisecond)
-			_, err := kv.Create(commandID, nil)
-			if err != nil {
-				log.Printf("Command in progress")
-				continue
-			}
+			time.Sleep(2000 * time.Millisecond)
 			// publish command liek users.create etc.
-			_, _ = js.Publish("cmds.first", []byte("Hello, world!"))
+			_, _ = js.Publish("cmds.first", []byte("Hello, world! 1"))
+			_, _ = js.Publish("cmds.first", []byte("Hello, world! 2"))
+			_, _ = js.Publish("cmds.first", []byte("Hello, world! 3"))
+			_, _ = js.Publish("cmds.first", []byte("Hello, world! 4"))
+			_, _ = js.Publish("cmds.first", []byte("Hello, world! 5"))
+			log.Printf("Published command")
+			// return
 		}
 	}()
 
-	sub, err := js.Subscribe("cmds.first", func(m *nats.Msg) {
-		log.Printf("Received message: %s", m.Data)
+	js.DeleteConsumer("COMMANDS", "first")
+	js.AddConsumer("COMMANDS", &nats.ConsumerConfig{
+		Durable:       "first",
+		FilterSubject: "cmds.>",
+		AckPolicy:     nats.AckExplicitPolicy,
+		DeliverGroup:  "q",
+	})
 
-		// unlock aggregate id
-		time.Sleep(2 * time.Second)
+	for i := 0; i < 10; i++ {
+		go func() {
+			sub, err := js.PullSubscribe("cmds.>", "first", nats.BindStream("COMMANDS"), nats.ManualAck(), nats.DeliverAll())
+			if err != nil {
+				log.Printf("Error creating subscription: %v", err)
+			}
+			_ = err
+			for {
+				msgs, err := sub.Fetch(1, nats.MaxWait(10*time.Second))
+				if err != nil {
+					if err == context.DeadlineExceeded || err == nats.ErrTimeout {
+						continue
+					}
+					log.Printf("Error fetching messages: %v", err)
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				for _, msg := range msgs {
+					log.Printf("Received message: %s", msg.Data)
+					// unlock aggregate id
 
-		// publish domain event
-		if _, err := js.Publish("events.first", m.Data); err != nil {
-			log.Printf("Error publishing event")
-			m.Nak()
-			return
-		}
+					var rev uint64
+					r, err := kv.Get(commandID)
+					if err != nil {
+						log.Printf("%v", err)
 
-		// unlock aggregate type + id
-		_ = kv.Delete(commandID)
-		_ = m.Ack()
-	}, nats.BindStream("COMMANDS"), nats.ManualAck(), nats.AckExplicit(), nats.Durable("first"))
-	if err != nil {
-		panic(err)
+						msg.NakWithDelay(1 * time.Second)
+						return
+					}
+					rev = r.Revision()
+
+					// do heavy logic here
+
+					if rv, err := kv.Update(commandID, nil, rev); err != nil {
+						log.Printf("Error unlocking aggregate id from %d to %d", rv, rev)
+						nc.Publish("ui.notify.error", []byte("Error unlocking aggregate id"))
+						msg.Nak()
+						return
+					}
+
+					// publish domain event
+					if _, err := js.Publish("events.first", msg.Data); err != nil {
+						log.Printf("Error publishing event")
+						msg.Nak()
+						return
+					}
+
+					// unlock aggregate type + id
+					_ = msg.Ack()
+				}
+			}
+		}()
 	}
-	defer sub.Unsubscribe()
 
 	// subscribe for domain events
 	subEvents, err := js.Subscribe("events.first", func(m *nats.Msg) {

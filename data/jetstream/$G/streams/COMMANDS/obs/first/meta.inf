@@ -1,1 +1,0 @@
-{"Created":"2025-04-17T13:11:51.27426Z","Name":"first","durable_name":"first","name":"first","deliver_policy":"all","ack_policy":"explicit","ack_wait":30000000000,"max_deliver":-1,"filter_subject":"cmds.first","replay_policy":"instant","max_ack_pending":1000,"deliver_subject":"_INBOX.Nf3IVrySPsR7v6M50UX9ZN","num_replicas":0}
