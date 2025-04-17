@@ -1,0 +1,59 @@
+# https://taskfile.dev
+
+version: '3'
+interval: 200ms
+
+tasks:
+
+  packages: 
+    desc: install dependencies
+    cmds:
+      - go get github.com/a-h/templ
+      - go get github.com/nats-io/nats.go
+      - go get -u github.com/go-chi/chi/v5
+      - go get github.com/nats-io/jwt/v2
+      - go get github.com/nats-io/nkeys
+      - go get github.com/joho/godotenv
+      - go get github.com/urfave/cli/v3
+
+  templ:  
+    env:
+      TEMPL_EXPERIMENT: rawgo
+    sources:
+      - "**/*.templ"
+    generates:
+      - "**/*_templ.go"
+    cmds:
+      - templ generate .
+
+  kill:
+    method: none
+    cmds:
+      - echo "Killing all processes"
+      # - lsof -i tcp:10000 | grep LISTEN | awk '{print $2}' | xargs kill 
+      - pkill -f ./site || true
+      # - lsof -i tcp:4222 | grep LISTEN | awk '{print $2}' | xargs kill 
+  
+  site:
+    method: none
+    desc: build the site
+    deps:
+      - kill
+      - templ
+    sources:
+      - "**/*.go"
+      - "**/*.md"
+      - "static/**/*"
+    generates:
+      - ./site
+    cmds:
+      - go mod tidy
+      - go build -o site ./cmd/app
+    
+  default:
+    method: none
+    deps:
+      - task: site
+    cmds: 
+      - echo "Running default task"
+      - ./site

@@ -1,0 +1,1 @@
+{"Created":"2025-04-17T13:21:51.718274Z","Name":"events1","durable_name":"events1","name":"events1","deliver_policy":"all","ack_policy":"explicit","ack_wait":30000000000,"max_deliver":-1,"filter_subject":"events.first","replay_policy":"instant","max_ack_pending":1000,"deliver_subject":"_INBOX.SE84PZj7zXgzIQSHMxqaLl","num_replicas":0}
